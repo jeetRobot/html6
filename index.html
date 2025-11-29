@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Suvver Secure Test Portal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Intro / agreement screen -->
+  <div id="intro-screen">
+    <div class="intro-card">
+      <h1>Suvver Exam Honor Agreement</h1>
+      <p>Before you start, read and agree to these rules:</p>
+      <ul class="intro-list">
+        <li>I will not leave this test window or switch tabs or apps during the exam.</li>
+        <li>I will not use notes, phones, or other people to help me.</li>
+        <li>I understand that leaving the window may be recorded and reported.</li>
+      </ul>
+
+      <div class="intro-field">
+        <label for="student-name">Type your full name as your signature:</label>
+        <input type="text" id="student-name" autocomplete="off" />
+      </div>
+
+      <div class="intro-check">
+        <input type="checkbox" id="honor-check" />
+        <label for="honor-check">
+          I understand and promise to follow these rules during the exam.
+        </label>
+      </div>
+
+      <div class="intro-actions">
+        <button id="start-btn" disabled>Start test</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main test UI -->
+  <div id="test-container">
+    <div class="top-bar">
+      <div class="status">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">Suvver secure mode: active</span>
+      </div>
+
+      <div class="fullscreen-hint">
+        Test in progress · Press F11 if you are not in fullscreen
+      </div>
+
+      <!-- 🔥 ADDED FOCUS COUNTER HERE -->
+      <div class="focus-counter">
+        Focus Lost: <span id="focus-count">0</span>
+      </div>
+      <!-- 🔥 END ADDED -->
+
+      <div class="timer" id="timer-display">
+        90:00
+      </div>
+    </div>
+
+    <div class="warning-banner">
+      Do not leave this window, switch tabs, or exit fullscreen. Your teacher may see your focus history.
+    </div>
+
+    <div class="frame-box">
+      <iframe
+        id="test-iframe"
+        src="https://docs.google.com/forms/d/e/1FAIpQLSe0GEAiiX-OyUIImZAK0E1R5XvUGnhijVaMfktkPUGNW20Y4A/viewform?embedded=true"
+        allowfullscreen
+      >
+        Loading…
+      </iframe>
+    </div>
+  </div>
+
+  <!-- Overlay -->
+  <div id="focus-overlay">
+    <h1 id="overlay-title">Test window not in focus</h1>
+    <p id="overlay-message">
+      You have left the secure test window or exited fullscreen.
+      Return to the test and click the button below.
+    </p>
+    <p class="attempts" id="attempt-text">Focus lost attempts: 1</p>
+    <button id="return-btn">Return to test</button>
+  </div>
+
+  <script>
+    // State
+    let testStarted = false;
+    let focusLostCount = 0;
+    let remainingSeconds = 90 * 60; // 90 minutes
+    let countdownInterval = null;
+
+    const introScreen = document.getElementById("intro-screen");
+    const honorCheck = document.getElementById("honor-check");
+    const nameInput = document.getElementById("student-name");
+    const startBtn = document.getElementById("start-btn");
+
+    const testContainer = document.getElementById("test-container");
+    const timerDisplay = document.getElementById("timer-display");
+    const statusDot = document.getElementById("status-dot");
+    const statusText = document.getElementById("status-text");
+    const testIframe = document.getElementById("test-iframe");
+
+    const overlay = document.getElementById("focus-overlay");
+    const overlayTitle = document.getElementById("overlay-title");
+    const overlayMessage = document.getElementById("overlay-message");
+    const attemptText = document.getElementById("attempt-text");
+    const returnBtn = document.getElementById("return-btn");
+
+    // NEW element for live focus counter
+    const focusCounter = document.getElementById("focus-count");
+
+    // Enable "Start test" only when name + checkbox filled
+    function updateStartEnabled() {
+      const nameFilled = nameInput.value.trim().length > 0;
+      const checked = honorCheck.checked;
+      startBtn.disabled = !(nameFilled && checked);
+    }
+
+    nameInput.addEventListener("input", updateStartEnabled);
+    honorCheck.addEventListener("change", updateStartEnabled);
+
+    // Fullscreen helper
+    function requestFullScreen() {
+      const el = document.documentElement;
+      if (el.requestFullscreen) el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+      else if (el.msRequestFullscreen) el.msRequestFullscreen();
+    }
+
+    // Timer
+    function formatTime(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      const mm = m.toString();
+      const ss = s < 10 ? "0" + s : s.toString();
+      return mm + ":" + ss;
+    }
+
+    function startCountdown() {
+      timerDisplay.textContent = formatTime(remainingSeconds);
+      countdownInterval = setInterval(() => {
+        if (!testStarted) return;
+        remainingSeconds--;
+        if (remainingSeconds < 0) {
+          remainingSeconds = 0;
+        }
+        timerDisplay.textContent = formatTime(remainingSeconds);
+
+        if (remainingSeconds <= 0) {
+          testStarted = false;
+          clearInterval(countdownInterval);
+          // Lock the form
+          testIframe.style.pointerEvents = "none";
+          testIframe.style.filter = "grayscale(1)";
+          showOverlay(
+            "Time is up",
+            "The 90 minute exam time has ended. Please let your teacher know you are finished.",
+            false
+          );
+        }
+      }, 1000);
+    }
+
+    // Overlay helpers
+    function showOverlay(title, message, allowReturn) {
+      overlayTitle.textContent = title;
+      overlayMessage.textContent = message;
+      returnBtn.style.display = allowReturn ? "inline-block" : "none";
+      overlay.style.display = "flex";
+      statusDot.style.background = "#f00";
+      statusText.textContent = "Suvver secure mode: interrupted";
+    }
+
+    function hideOverlay() {
+      overlay.style.display = "none";
+      statusDot.style.background = "#0f0";
+      statusText.textContent = "Suvver secure mode: active";
+      requestFullScreen();
+    }
+
+    // Start button click
+    startBtn.addEventListener("click", () => {
+      introScreen.style.display = "none";
+      testContainer.style.display = "block";
+      testStarted = true;
+      remainingSeconds = 90 * 60;
+      requestFullScreen();
+      startCountdown();
+    });
+
+    // Block right click
+    document.addEventListener("contextmenu", function (e) {
+      e.preventDefault();
+    });
+
+    // Block most keyboard shortcuts
+    document.addEventListener("keydown", function (e) {
+      const blockedKeys = ["F12", "Escape"];
+      if (blockedKeys.includes(e.key)) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    });
+
+    // Warn before closing or refreshing (only after start)
+    window.addEventListener("beforeunload", function (e) {
+      if (!testStarted) return;
+      e.preventDefault();
+      e.returnValue = "";
+    });
+
+    // Focus / visibility detection WITH COUNTER UPDATE
+    function handleFocusLoss() {
+      if (!testStarted) return;
+
+      focusLostCount++;
+
+      // Update overlay text
+      attemptText.textContent = "Focus lost attempts: " + focusLostCount;
+
+      // NEW: update top bar counter
+      focusCounter.textContent = focusLostCount;
+
+      showOverlay(
+        "Test window not in focus",
+        "You left the secure test window or exited fullscreen. Return to the test and click the button below.",
+        true
+      );
+    }
+
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState !== "visible") {
+        handleFocusLoss();
+      }
+    });
+
+    document.addEventListener("fullscreenchange", function () {
+      if (!document.fullscreenElement && testStarted) {
+        handleFocusLoss();
+      }
+    });
+
+    returnBtn.addEventListener("click", function () {
+      hideOverlay();
+    });
+  </script>
+</body>
+</html>
